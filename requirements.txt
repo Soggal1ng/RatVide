@@ -1,0 +1,8 @@
+eventlet
+flask
+socket
+psutil
+python-socketio
+pyautogui
+opencv-python
+numpy
